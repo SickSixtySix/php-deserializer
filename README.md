@@ -9,4 +9,4 @@ using SickSixtySix.PHPDeserializer;
 
 ...
 
-var data = new PHPDeserializer("a:2:{s:5:\"Hello\";s:6:\"Привет\";}").Deserialize();
+var data = new PHPDeserializer("a:2:{i:0;s:5:\"Hello\";i:1;s:6:\"Привет\";}").Deserialize();
