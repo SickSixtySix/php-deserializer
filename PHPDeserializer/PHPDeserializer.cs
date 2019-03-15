@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text;
 using System.Collections.Generic;
 
 namespace SickSixtySix.PHPDeserializer
@@ -17,15 +18,13 @@ namespace SickSixtySix.PHPDeserializer
         /// <param name="required">When set to false allows to skip parsing if character is not at current offset</param>
         private bool parseCharacter(char character, bool required = true)
         {
-            if (required)
-            {
-                if (Current == character)
-                    m_offset++;
-                else
-                    throw new InvalidOperationException($"'{character}' expected at offset {m_offset} ('{Current}' instead)");
-            }
+            var equals = Current == character;
+            if (equals)
+                m_offset++;
+            else if (required)
+                throw new InvalidOperationException($"'{character}' expected at offset {m_offset} ('{Current}' instead)");
 
-            return Current == character;
+            return equals;
         }
 
         /// <summary>
@@ -78,8 +77,9 @@ namespace SickSixtySix.PHPDeserializer
         {
             if (Current >= '0' && Current <= '9')
             {
+                var digit = Current - '0';
                 m_offset++;
-                return Current - '0';
+                return digit;
             }
 
             throw new InvalidOperationException($"Digit expected at offset {m_offset} ('{Current}' instead)");
@@ -111,9 +111,10 @@ namespace SickSixtySix.PHPDeserializer
         public int _parseUnsignedInteger()
         {
             // Trivial case (first digit)
+            int digit = 0;
             try
             {
-                var digit = parseDigit();
+                digit = parseDigit();
                 if (digit == 0)
                     return 0;
             }
@@ -191,7 +192,7 @@ namespace SickSixtySix.PHPDeserializer
         {
             parseCharacter('b');
             parseColon();
-            return _parseBoolean;
+            return _parseBoolean();
         }
 
         /// <summary>
@@ -224,7 +225,7 @@ namespace SickSixtySix.PHPDeserializer
         {
             parseCharacter('s');
             parseColon();
-            var length = _parseInteger();
+            var length = _parseUnsignedInteger();
             parseColon();
             parseQuote();
 
@@ -275,7 +276,7 @@ namespace SickSixtySix.PHPDeserializer
             {
                 var key = parseArrayKey();
                 parseSemicolon();
-                var value = parse();
+                var value = parseNode();
                 parseSemicolon(i != size - 1);
                 dictionary[key] = value;
             }
@@ -288,7 +289,7 @@ namespace SickSixtySix.PHPDeserializer
         /// Parses a node
         /// </summary>
         /// <returns>Parsed node</returns>
-        private object parse()
+        private object parseNode()
         {
             switch (Current)
             {
@@ -351,5 +352,59 @@ namespace SickSixtySix.PHPDeserializer
         {
             return (IDictionary<object, object>)parseArray();
         }
+
+        #region ToString() override
+
+        /// <summary>
+        /// Decorates primitive type value
+        /// </summary>
+        /// <param name="node">Primitive type value to decorate</param>
+        /// <returns>Decorated string value</returns>
+        private static string decorate(object node)
+        {
+            if (node is String)
+                return $"\"{node}\"";
+
+            return node.ToString();
+        }
+
+        /// <summary>
+        /// Performs recursive traverse of a tree
+        /// </summary>
+        /// <param name="node">Tree to traverse</param>
+        /// <param name="stringBuilder">StringBuilder instance to accumulate partial results</param>
+        /// <param name="depth">Current traverse depth (count of whitespaces before current element)</param>
+        private static void traverse(object node, StringBuilder stringBuilder, int depth = 0)
+        {
+            if (node is IDictionary<object, object>)
+            {
+                if (depth > 0)
+                    stringBuilder.AppendLine();
+
+                stringBuilder.Append(' ', depth).AppendLine("{");
+                var dictionary = (IDictionary<object, object>)node;
+                foreach (var pair in dictionary)
+                {
+                    stringBuilder.Append(' ', depth + 3).Append($"{decorate(pair.Key)} => ");
+                    traverse(pair.Value, stringBuilder, depth + 3);
+                }
+                stringBuilder.Append(' ', depth).AppendLine("}");
+            }
+            else
+                stringBuilder.AppendLine(decorate(node));
+        }
+
+        /// <summary>
+        /// Conversion into PHP-like associative array representation
+        /// </summary>
+        /// <returns>PHP-like associative array representation</returns>
+        public override string ToString()
+        {
+            var stringBuilder = new StringBuilder();
+            traverse(Deserialize(), stringBuilder);
+            return stringBuilder.ToString();
+        }
+
+        #endregion
     }
 }
