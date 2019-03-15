@@ -8,114 +8,225 @@ namespace SickSixtySix.PHPDeserializer
     /// </summary>
     public class PHPDeserializer : IDeserializer
     {
-        #region Helper methods
-
-        /// <summary>
-        /// Parses an integer number
-        /// </summary>
-        /// <returns>Parsed unsigned integer number</returns>
-        public int _parseNUM()
-        {
-            if (Current == '0')
-            {
-                m_offset++;
-                return 0;
-            }
-
-            bool p = true;
-            if (Current == '-')
-            {
-                p = false;
-                m_offset++;
-            }
-
-            int number = 0;
-            while (Current >= '0' && Current <= '9')
-            {
-                number *= 10;
-                number += Current - '0';
-                m_offset++;
-            }
-
-            return p ? number : -number;
-        }
-
-        #endregion
-
         #region Character parsing methods
 
         /// <summary>
         /// Parses a single character
         /// </summary>
-        /// <param name="c">Character to parse</param>
-        /// <param name="r">When set to false allows to skip parsing if character is not at current offset</param>
-        private void parseCHR(char c, bool r = true)
+        /// <param name="character">Character to parse</param>
+        /// <param name="required">When set to false allows to skip parsing if character is not at current offset</param>
+        private bool parseCharacter(char character, bool required = true)
         {
-            if (Current == c)
-                m_offset++;
-            else if (r)
-                throw new InvalidOperationException($"'{c}' expected at offset {m_offset} ('{Current}' instead)");
+            if (required)
+            {
+                if (Current == character)
+                    m_offset++;
+                else
+                    throw new InvalidOperationException($"'{character}' expected at offset {m_offset} ('{Current}' instead)");
+            }
+
+            return Current == character;
         }
 
         /// <summary>
         /// Parses ':' character
         /// </summary>
-        public void parseCOL()
-            => parseCHR(':');
+        public bool parseColon(bool required = true)
+            => parseCharacter(':', required);
 
         /// <summary>
         /// Parses '"' character
         /// </summary>
-        public void parseQTE()
-            => parseCHR('"');
+        public bool parseQuote(bool required = true)
+            => parseCharacter('"', required);
 
         /// <summary>
         /// Parses ';' character
         /// </summary>
-        public void parseSEM(bool r = true)
-            => parseCHR(';', r);
+        public bool parseSemicolon(bool required = true)
+            => parseCharacter(';', required);
 
         /// <summary>
         /// Parses '{' character
         /// </summary>
-        public void parseOBR()
-            => parseCHR('{');
+        public bool parseOpenBrace(bool required = true)
+            => parseCharacter('{', required);
 
         /// <summary>
         /// Parses '}' character
         /// </summary>
-        public void parseCBR()
-            => parseCHR('}');
+        public bool parseCloseBrace(bool required = true)
+            => parseCharacter('}', required);
+
+        /// <summary>
+        /// Parses '-' character
+        /// </summary>
+        public bool parseDash(bool required = true)
+            => parseCharacter('-', required);
+
+        /// <summary>
+        /// Parses '.' character
+        /// </summary>
+        public bool parseDot(bool required = true)
+            => parseCharacter('-', required);
+
+        /// <summary>
+        /// Parses a digit
+        /// </summary>
+        /// <returns>Parsed digit</returns>
+        public int parseDigit()
+        {
+            if (Current >= '0' && Current <= '9')
+            {
+                m_offset++;
+                return Current - '0';
+            }
+
+            throw new InvalidOperationException($"Digit expected at offset {m_offset} ('{Current}' instead)");
+        }
+
+        #endregion
+
+        #region Helper methods
+
+        /// <summary>
+        /// Parses a boolean value
+        /// </summary>
+        /// <returns>Parsed boolean value</returns>
+        public bool _parseBoolean()
+        {
+            if (Current == '0' || Current == '1')
+            {
+                m_offset++;
+                return Current == '1';
+            }
+
+            throw new InvalidOperationException($"Wrong boolean at offset {m_offset}");
+        }
+
+        /// <summary>
+        /// Parses an unsigned integer number
+        /// </summary>
+        /// <returns>Parsed unsigned integer number</returns>
+        public int _parseUnsignedInteger()
+        {
+            // Trivial case (first digit)
+            try
+            {
+                var digit = parseDigit();
+                if (digit == 0)
+                    return 0;
+            }
+            catch (Exception e)
+            {
+                throw new InvalidOperationException($"Wrong unsigned integer at offset {m_offset}", e);
+            }
+
+            // Parsing rest of an unsigned integer
+            var number = digit;
+            try
+            {
+                while (true)
+                {
+                    digit = parseDigit();
+                    number *= 10;
+                    number += digit;
+                }
+            }
+            catch { }
+
+            return number;
+        }
+
+        /// <summary>
+        /// Parses an integer number
+        /// </summary>
+        /// <returns>Parsed integer number</returns>
+        public int _parseInteger()
+        {
+            var negative = parseDash(false);
+
+            int number = 0;
+            try
+            {
+                number = _parseUnsignedInteger();
+            }
+            catch (Exception e)
+            {
+                throw new InvalidOperationException($"Wrong integer at offset {m_offset}", e);
+            }
+
+            return negative ? -number : number;
+        }
+
+        /// <summary>
+        /// Parses a double number
+        /// </summary>
+        /// <returns>Parsed double number</returns>
+        public double _parseDouble()
+        {
+            var _integer = _parseInteger();
+            parseDot();
+            var offset = m_offset;
+            var _fraction = _parseUnsignedInteger();
+            var length = offset - m_offset;
+
+            double number = _fraction;
+            while (length-- > 0)
+                number *= 0.1;
+            number += _integer;
+
+            return number;
+        }
 
         #endregion
 
         #region Non-terminal parsing methods
 
         /// <summary>
+        /// Parses a boolean
+        /// </summary>
+        /// <returns>Parsed boolean</returns>
+        private object parseBoolean()
+        {
+            parseCharacter('b');
+            parseColon();
+            return _parseBoolean;
+        }
+
+        /// <summary>
         /// Parses an integer
         /// </summary>
-        /// <param name="state"></param>
         /// <returns>Parsed integer</returns>
-        private object parseI()
+        private object parseInteger()
         {
-            parseCHR('i');
-            parseCOL();
-            return _parseNUM();
+            parseCharacter('i');
+            parseColon();
+            return _parseInteger();
+        }
+
+        /// <summary>
+        /// Parses a double
+        /// </summary>
+        /// <returns>Parsed double</returns>
+        private object parseDouble()
+        {
+            parseCharacter('d');
+            parseColon();
+            return _parseDouble();
         }
 
         /// <summary>
         /// Parses a string
         /// </summary>
         /// <returns>Parsed string</returns>
-        private object parseS()
+        private object parseString()
         {
-            parseCHR('s');
-            parseCOL();
-
-            var length = _parseNUM();
-
-            parseCOL();
-            parseQTE();
+            parseCharacter('s');
+            parseColon();
+            var length = _parseInteger();
+            parseColon();
+            parseQuote();
 
             string str = null;
             try
@@ -128,45 +239,62 @@ namespace SickSixtySix.PHPDeserializer
                 throw new InvalidOperationException($"Too long string at offset {m_offset}");
             }
 
-            parseQTE();
+            parseQuote();
             return str;
+        }
+
+        /// <summary>
+        /// Parses array key
+        /// </summary>
+        /// <returns>Parsed array key</returns>
+        private object parseArrayKey()
+        {
+            switch (Current)
+            {
+                case 'i': return parseInteger();
+                case 's': return parseString();
+                default:
+                    throw new InvalidOperationException($"Wrong array key of type '{Current}' at offset {m_offset}");
+            }
         }
 
         /// <summary>
         /// Parses an array
         /// </summary>
         /// <returns></returns>
-        private object parseA()
+        private object parseArray()
         {
-            parseCHR('a');
-            parseCOL();
-
-            var size = _parseNUM();
-
-            parseCOL();
-            parseOBR();
+            parseCharacter('a');
+            parseColon();
+            var size = _parseInteger();
+            parseColon();
+            parseOpenBrace();
 
             var dictionary = new Dictionary<object, object>();
             for (int i = 0; i < size; i++)
             {
-                var key = parse();
-                parseSEM();
+                var key = parseArrayKey();
+                parseSemicolon();
                 var value = parse();
-                parseSEM(i != size - 1);
+                parseSemicolon(i != size - 1);
                 dictionary[key] = value;
             }
 
-            parseCBR();
+            parseCloseBrace();
             return dictionary;
         }
 
+        /// <summary>
+        /// Parses a node
+        /// </summary>
+        /// <returns>Parsed node</returns>
         private object parse()
         {
             switch (Current)
             {
-                case 'i': return parseI();
-                case 's': return parseS();
-                case 'a': return parseA();
+                case 'i': return parseInteger();
+                case 's': return parseString();
+                case 'a': return parseArray();
                 default:
                     throw new InvalidOperationException($"Parsing of non-terminal of type '{Current}' at offset {m_offset} is not implemented yet");
             }
@@ -221,7 +349,7 @@ namespace SickSixtySix.PHPDeserializer
         /// <returns>object-object mapping</returns>
         public IDictionary<object, object> Deserialize()
         {
-            return (IDictionary<object, object>)parseA();
+            return (IDictionary<object, object>)parseArray();
         }
     }
 }
