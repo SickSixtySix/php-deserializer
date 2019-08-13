@@ -232,7 +232,7 @@ namespace SickSixtySix.PHPDeserializer
             string str = null;
             try
             {
-                str = m_string.Substring(m_offset, length);
+                str = Encoding.UTF8.GetString(m_string, m_offset, length);
                 m_offset += length;
             }
             catch (ArgumentOutOfRangeException)
@@ -308,12 +308,12 @@ namespace SickSixtySix.PHPDeserializer
         /// <summary>
         /// String containing serialized data
         /// </summary>
-        private string m_string;
+        private byte[] m_string;
 
         /// <summary>
         /// Current parsing offset
         /// </summary>
-        private int m_offset;
+        private int m_offset = 0;
 
         /// <summary>
         /// Character at current offset
@@ -324,7 +324,7 @@ namespace SickSixtySix.PHPDeserializer
             {
                 try
                 {
-                    return m_string[m_offset];
+                    return (char) m_string[m_offset];
                 }
                 catch (IndexOutOfRangeException)
                 {
@@ -340,6 +340,11 @@ namespace SickSixtySix.PHPDeserializer
         /// </summary>
         /// <param name="str"></param>
         public PHPDeserializer(string str)
+        {
+            m_string = Encoding.UTF8.GetBytes(str);
+        }
+
+        public PHPDeserializer(byte[] str)
         {
             m_string = str;
         }
@@ -400,8 +405,11 @@ namespace SickSixtySix.PHPDeserializer
         /// <returns>PHP-like associative array representation</returns>
         public override string ToString()
         {
+            var offset = m_offset;
+            m_offset = 0;
             var stringBuilder = new StringBuilder();
             traverse(Deserialize(), stringBuilder);
+            m_offset = offset;
             return stringBuilder.ToString();
         }
 
