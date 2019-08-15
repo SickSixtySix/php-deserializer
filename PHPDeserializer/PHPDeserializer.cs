@@ -160,6 +160,31 @@ namespace SickSixtySix.PHPDeserializer
             return negative ? -number : number;
         }
 
+        public decimal _parseDecimal()
+        {
+            decimal number;
+            var start = m_offset;
+
+            for (; m_offset < m_string.Length; m_offset++)
+            {
+                if (m_string[m_offset] == ';')
+                    break;
+            }
+            if (m_string[m_offset] != ';')
+                throw new InvalidOperationException($"Unexpected end of number at offset {m_offset}. string = ${Encoding.UTF8.GetString(m_string)}");
+            var s = Encoding.Default.GetString(m_string, start, m_offset - start);
+
+            try
+            {
+                number = Convert.ToDecimal(s);
+                return number;
+            }
+            catch (Exception e)
+            {
+                throw new InvalidOperationException($"Wrong decimal at offset {start}. value = {s}. string = {Encoding.UTF8.GetString(m_string)}", e);
+            }
+        }
+
         /// <summary>
         /// Parses a double number
         /// </summary>
@@ -204,6 +229,13 @@ namespace SickSixtySix.PHPDeserializer
             parseCharacter('i');
             parseColon();
             return _parseInteger();
+        }
+
+        private object parseDecimal()
+        {
+            parseCharacter('d');
+            parseColon();
+            return _parseDecimal();
         }
 
         /// <summary>
@@ -296,8 +328,10 @@ namespace SickSixtySix.PHPDeserializer
                 case 'i': return parseInteger();
                 case 's': return parseString();
                 case 'a': return parseArray();
+                case 'd': return parseDecimal();
                 default:
-                    throw new InvalidOperationException($"Parsing of non-terminal of type '{Current}' at offset {m_offset} is not implemented yet");
+                    throw new InvalidOperationException($"Parsing of non-terminal of type '{Current}' at offset {m_offset} is not implemented yet." +
+                        $" string = {Encoding.UTF8.GetString(m_string)}");
             }
         }
 
